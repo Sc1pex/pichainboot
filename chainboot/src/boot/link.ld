@@ -26,5 +26,7 @@ SECTIONS {
         *(.ARM.attributes)
         *(.debug*)
         *(.note*)
+        *(.eh_frame*)
+        *(.eh_frame_hdr*)
     }
 }

@@ -7,9 +7,7 @@ pub fn build(b: *std.Build) void {
         .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.cortex_a72 },
         .os_tag = .freestanding,
     });
-    const optimize = b.standardOptimizeOption(.{
-        .preferred_optimize_mode = .ReleaseSmall,
-    });
+    const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size") orelse .ReleaseSmall;
 
     const exe = b.addExecutable(.{
         .name = "chainboot",
@@ -23,4 +21,13 @@ pub fn build(b: *std.Build) void {
     exe.setLinkerScript(b.path("src/boot/link.ld"));
 
     b.installArtifact(exe);
+
+    const kernel_img = exe.addObjCopy(.{
+        .basename = "kernel8.img",
+        .format = .bin,
+    });
+    b.getInstallStep().dependOn(&b.addInstallBinFile(
+        kernel_img.getOutput(),
+        "kernel8.img",
+    ).step);
 }

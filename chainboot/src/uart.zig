@@ -136,7 +136,7 @@ pub fn write(byte: u8) void {
     defer mmio.readBarrier();
 
     // Wait until transmit FIFO is not full
-    while ((uart0.fr.read().txff) != 0) {}
+    while (uart0.fr.read().txff != 0) {}
 
     uart0.dr.write(.{ .data = byte });
 }
@@ -146,7 +146,7 @@ pub fn read() u8 {
     defer mmio.readBarrier();
 
     // Wait until receive FIFO is empty
-    while ((uart0.fr.read().rxff) != 0) {}
+    while (uart0.fr.read().rxfe != 0) {}
 
     return uart0.dr.read().data;
 }
@@ -156,7 +156,7 @@ pub fn read_noblock() ?u8 {
     defer mmio.readBarrier();
 
     // If receive FIFO is empty, there is no data
-    if ((uart0.fr.read().rxff) != 0) {
+    if (uart0.fr.read().rxfe != 0) {
         return null;
     }
 
@@ -178,11 +178,3 @@ fn calculateBaudDivisors(comptime clock: u32, comptime baud: u32) BaudDivisors {
     const fbrd = ((remainder * 64) + (denom / 2)) / denom;
     return .{ .ibrd = ibrd, .fbrd = fbrd };
 }
-
-// const DR = mmio.UART0_BASE + 0x00;
-// const FR = mmio.UART0_BASE + 0x18;
-// const IBRD = mmio.UART0_BASE + 0x24;
-// const FBRD = mmio.UART0_BASE + 0x28;
-// const LCRH = mmio.UART0_BASE + 0x2C;
-// const CR = mmio.UART0_BASE + 0x30;
-// const ICR = mmio.UART0_BASE + 0x44;

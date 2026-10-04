@@ -205,7 +205,8 @@ END        payload: crc32 u32       CRC32 of all `size` bytes of the transfer
   most `max_payload - 4` bytes.
 - `END` computes the CRC32 over the whole destination range and compares it to
   the one given. On a match, the transfer becomes *verified* and the device
-  replies `OK`. Otherwise it replies `ERR CHECKSUM`, and the host can resend
+  replies `OK`. Any later `DATA` or `MEM_WRITE` clears the verification, since
+  memory may have changed. Otherwise it replies `ERR CHECKSUM`, and the host can resend
   some or all chunks and send `END` again.
 
 The device doesn't track which chunks have arrived. The final CRC is what

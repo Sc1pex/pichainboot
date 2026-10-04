@@ -14,13 +14,17 @@ use crate::transport::Transport;
 use crate::worker::{self, Command, Event, Settings};
 use app::App;
 
-pub async fn run(transport: Transport, settings: Settings, port: String) -> anyhow::Result<()> {
-    let app = App::new(
+pub async fn run(transport: Transport, settings: Settings, port: String, notes: Vec<String>) -> anyhow::Result<()> {
+    let mut app = App::new(
         port,
         settings.image.display().to_string(),
         settings.addr,
         settings.auto,
     );
+    app.can_reset = settings.reset.is_some();
+    for note in notes {
+        app.handle_worker_event(Event::Log(note));
+    }
 
     let (event_tx, events) = mpsc::unbounded_channel();
     let (commands, command_rx) = mpsc::unbounded_channel();

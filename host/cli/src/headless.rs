@@ -52,12 +52,15 @@ impl StatusPrinter {
     }
 }
 
-pub async fn run(transport: Transport, settings: Settings) -> anyhow::Result<()> {
+pub async fn run(transport: Transport, settings: Settings, notes: Vec<String>) -> anyhow::Result<()> {
     let (event_tx, mut events) = mpsc::unbounded_channel();
     let (commands, command_rx) = mpsc::unbounded_channel();
     tokio::spawn(worker::run(transport, settings, event_tx, command_rx));
 
     let mut status = StatusPrinter::default();
+    for note in &notes {
+        status.line(note);
+    }
     let interactive = std::io::stdin().is_terminal();
     let _raw_mode = if interactive {
         status.line("press Ctrl-] to quit");

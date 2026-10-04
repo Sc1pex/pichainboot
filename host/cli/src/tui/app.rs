@@ -24,6 +24,8 @@ pub struct App {
     pub image: String,
     pub addr: u64,
     pub auto: bool,
+    /// The connection can reset the device
+    pub can_reset: bool,
     pub status: Status,
     pub progress: Option<(usize, usize)>,
     /// Set when the worker stopped
@@ -45,6 +47,7 @@ impl App {
             image,
             addr,
             auto,
+            can_reset: false,
             status: Status::WaitingForDevice,
             progress: None,
             fatal: None,
@@ -141,6 +144,8 @@ impl App {
                 self.push_log(format!("auto boot {state}"), false);
                 return vec![Command::SetAuto(self.auto)];
             }
+            'r' if self.can_reset => return vec![Command::Reset],
+            'r' => self.push_log("this connection cannot reset the device".into(), true),
             'c' => {
                 self.console.clear();
                 self.scroll = 0;
@@ -221,6 +226,19 @@ mod tests {
         press(&mut app, KeyCode::Char('a'), KeyModifiers::CONTROL);
         press(&mut app, KeyCode::Char('q'), KeyModifiers::NONE);
         assert!(app.quit);
+    }
+
+    #[test]
+    fn resets_only_when_the_connection_can() {
+        let mut app = app();
+        assert!(press(&mut app, KeyCode::Char('r'), KeyModifiers::NONE).is_empty());
+        assert!(app.log.back().unwrap().error);
+
+        app.can_reset = true;
+        assert!(matches!(press(&mut app, KeyCode::Char('r'), KeyModifiers::NONE)[..], [Command::Reset]));
+        app.handle_worker_event(Event::Status(Status::Booted(BootOutcome::Confirmed)));
+        press(&mut app, KeyCode::Char('a'), KeyModifiers::CONTROL);
+        assert!(matches!(press(&mut app, KeyCode::Char('r'), KeyModifiers::NONE)[..], [Command::Reset]));
     }
 
     #[test]

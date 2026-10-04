@@ -10,7 +10,7 @@ use pichainboot_proto::{BootOutcome, Client, Config, Error, Info};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 
-use crate::transport::Transport;
+use crate::transport::{Reset, Transport};
 
 /// The device ends a session after 10 s without a valid frame
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(3);
@@ -26,6 +26,10 @@ pub struct Settings {
     /// Boot as soon as the device connects until the first boot succeeds,
     /// even without `auto`
     pub boot_first: bool,
+    /// How to reset the device, if the connection supports it
+    pub reset: Option<Reset>,
+    /// Reset the device before waiting for it
+    pub reset_on_start: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -51,6 +55,8 @@ pub enum Event {
 pub enum Command {
     Boot,
     SetAuto(bool),
+    /// Reset the device through the connection
+    Reset,
     /// Console input for the booted kernel
     Input(Vec<u8>),
 }
@@ -91,9 +97,24 @@ impl Worker {
         self.send(Event::Log(message.into()));
     }
 
+    async fn reset_device(&self) {
+        let Some(reset) = &self.settings.reset else {
+            self.send(Event::Error("this connection cannot reset the device".into()));
+            return;
+        };
+        self.log("resetting the device");
+        if let Err(e) = reset.reset().await {
+            self.send(Event::Error(format!("reset failed: {e:#}")));
+        }
+    }
+
     async fn run(&mut self, mut io: Transport) -> Result<(), Error> {
         let mut pending = Vec::new();
         let mut booted_once = false;
+
+        if self.settings.reset_on_start {
+            self.reset_device().await;
+        }
 
         loop {
             let mut client = Client::with_pending(io, self.settings.client.clone(), pending);
@@ -137,6 +158,7 @@ impl Worker {
                 command = self.commands.recv() => match command {
                     Some(Command::SetAuto(auto)) => self.settings.auto = auto,
                     Some(Command::Boot) => self.log("waiting for the device, reset it to connect"),
+                    Some(Command::Reset) => self.reset_device().await,
                     Some(Command::Input(_)) => {}
                     None => return Ok(None),
                 },
@@ -160,11 +182,15 @@ impl Worker {
                                     break;
                                 }
                             }
+                            // The device announces itself again after the
+                            // reset and the session restarts
+                            Some(Command::Reset) => self.reset_device().await,
                             Some(Command::Input(_)) => {}
                             None => return Ok(SessionEnd::Quit),
                         },
                         _ = keepalive.tick() => match client.ping().await {
-                            Ok(()) | Err(Error::SessionRestarted) => {}
+                            Ok(()) => {}
+                            Err(Error::SessionRestarted) => self.log("device reset, new session started"),
                             Err(Error::Timeout(..)) => {
                                 self.send(Event::Error("device stopped responding".into()));
                                 return Ok(SessionEnd::Reconnect);
@@ -202,10 +228,25 @@ impl Worker {
                 }
             };
 
-            match client
-                .load_and_boot(self.settings.addr, self.settings.entry, &image, progress)
-                .await
-            {
+            // Keep handling commands while loading. A reset makes the device
+            // restart the session, and the load starts over.
+            let result = {
+                let load = client.load_and_boot(self.settings.addr, self.settings.entry, &image, progress);
+                tokio::pin!(load);
+                loop {
+                    tokio::select! {
+                        result = &mut load => break result,
+                        command = self.commands.recv() => match command {
+                            Some(Command::Reset) => self.reset_device().await,
+                            Some(Command::SetAuto(auto)) => self.settings.auto = auto,
+                            Some(Command::Boot | Command::Input(_)) => {}
+                            None => return Ok(SessionEnd::Quit),
+                        },
+                    }
+                }
+            };
+
+            match result {
                 Ok(outcome) => {
                     match outcome {
                         BootOutcome::Confirmed => self.log(format!("booted at {:#x}", self.settings.entry)),
@@ -233,13 +274,6 @@ impl Worker {
 
     /// Forwards console output and input until the device resets
     async fn console(&mut self, io: &mut Transport, leftover: Vec<u8>) -> Result<ConsoleEnd, Error> {
-        // Input typed while loading was not meant for the new kernel
-        while let Ok(command) = self.commands.try_recv() {
-            if let Command::SetAuto(auto) = command {
-                self.settings.auto = auto;
-            }
-        }
-
         let mut magic = MagicMatcher::default();
         if let Some(end) = self.console_output(&mut magic, &leftover) {
             return Ok(end);
@@ -264,6 +298,7 @@ impl Worker {
                     }
                     Some(Command::SetAuto(auto)) => self.settings.auto = auto,
                     Some(Command::Boot) => self.log("reset the device to boot again"),
+                    Some(Command::Reset) => self.reset_device().await,
                     None => return Ok(ConsoleEnd::Quit),
                 },
             }

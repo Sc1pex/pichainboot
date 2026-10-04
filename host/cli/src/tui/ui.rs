@@ -105,12 +105,14 @@ fn draw_log(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_help(frame: &mut Frame, app: &App, area: Rect) {
+    let reset = if app.can_reset { "r reset · " } else { "" };
     let text = if app.prefix {
-        "Ctrl-A: b boot · a toggle auto boot · c clear console · q quit · Ctrl-A send Ctrl-A"
+        format!("Ctrl-A: b boot · {reset}a toggle auto boot · c clear console · q quit · Ctrl-A send Ctrl-A")
     } else if app.console_active() {
-        "typing goes to the device · Ctrl-A then b/a/c/q for commands · Shift-PgUp/PgDn scroll"
+        let keys = if app.can_reset { "b/r/a/c/q" } else { "b/a/c/q" };
+        format!("typing goes to the device · Ctrl-A then {keys} for commands · Shift-PgUp/PgDn scroll")
     } else {
-        "b boot · a toggle auto boot · c clear console · q quit · PgUp/PgDn scroll"
+        format!("b boot · {reset}a toggle auto boot · c clear console · q quit · PgUp/PgDn scroll")
     };
     frame.render_widget(
         Line::from(format!(" {text}")).style(Style::new().add_modifier(Modifier::DIM)),
@@ -140,6 +142,14 @@ mod tests {
                     + "\n"
             })
             .collect()
+    }
+
+    #[test]
+    fn shows_the_reset_key_when_available() {
+        let mut app = App::new("tcpuart:pi".into(), "kernel8.img".into(), 0x80000, false);
+        assert!(!render(&app).contains("r reset"));
+        app.can_reset = true;
+        assert!(render(&app).contains("b boot · r reset"));
     }
 
     #[test]

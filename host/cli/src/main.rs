@@ -1,4 +1,6 @@
 mod headless;
+#[cfg(feature = "tcpuart")]
+mod tcpuart;
 mod transport;
 mod tui;
 mod worker;
@@ -22,7 +24,8 @@ struct Args {
     /// Image to load. It is read again before every boot.
     image: PathBuf,
 
-    /// Serial port, or tcp:HOST:PORT for a serial port bridged over TCP (e.g. QEMU)
+    /// Serial port, tcp:HOST:PORT for a serial port bridged over TCP (e.g. QEMU),
+    /// or tcpuart:NAME for a connection of a tcpuart daemon
     #[arg(short, long)]
     port: String,
 
@@ -55,6 +58,15 @@ struct Args {
     /// No TUI: boot once, then act as a plain serial console on stdin/stdout
     #[arg(long)]
     headless: bool,
+
+    /// Reset the device at startup. Needs a connection that can reset it (tcpuart).
+    #[arg(long)]
+    reset: bool,
+
+    /// Socket of the tcpuart daemon
+    #[cfg(feature = "tcpuart")]
+    #[arg(long, env = "TCPUART_SOCKET", default_value = tcpuart::DEFAULT_SOCKET)]
+    tcpuart_socket: PathBuf,
 
     /// Write debug logs to this file
     #[arg(long)]
@@ -89,6 +101,18 @@ fn init_logging(args: &Args) -> anyhow::Result<()> {
 async fn run(args: Args) -> anyhow::Result<()> {
     init_logging(&args)?;
 
+    let opened = transport::open(&transport::Options {
+        port: &args.port,
+        baud: args.baud,
+        flow_control: args.flow_control,
+        #[cfg(feature = "tcpuart")]
+        tcpuart_socket: &args.tcpuart_socket,
+    })
+    .await?;
+    if args.reset && opened.reset.is_none() {
+        anyhow::bail!("--reset needs a connection that can reset the device, like tcpuart:NAME");
+    }
+
     let settings = Settings {
         image: args.image.clone(),
         addr: args.addr,
@@ -100,13 +124,14 @@ async fn run(args: Args) -> anyhow::Result<()> {
         },
         auto: args.auto,
         boot_first: args.headless,
+        reset: opened.reset,
+        reset_on_start: args.reset,
     };
-    let transport = transport::open(&args.port, args.baud, args.flow_control).await?;
 
     if args.headless {
-        headless::run(transport, settings).await
+        headless::run(opened.stream, settings, opened.notes).await
     } else {
-        tui::run(transport, settings, args.port).await
+        tui::run(opened.stream, settings, args.port, opened.notes).await
     }
 }
 

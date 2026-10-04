@@ -82,6 +82,30 @@ Other options: `--addr` and `--entry` set the load and entry addresses (default
 `0x80000`), `--baud`, `--flow-control none`, `--timeout-ms` and `--retries`
 for slow links, and `--log-file` for debug logs. See `pichainboot --help`.
 
+## Over Wi-Fi with tcpuart
+
+[tcpuart](https://github.com/Sc1pex/tcpuart) bridges the Pi's UART over Wi-Fi
+through an ESP32. Build the host tool with the `tcpuart` feature to use its
+connections by name and reset the Pi remotely:
+
+```sh
+cargo build --release --features tcpuart
+pichainboot -p tcpuart:pi path/to/kernel8.img
+```
+
+The PTY of the connection is looked up through the tcpuart daemon (socket
+`/tmp/tcpuart.sock`, or `--tcpuart-socket` / `TCPUART_SOCKET`). The TUI gains
+an `r` key (`Ctrl-A r` in the console) that resets the Pi through the ESP32's
+reset line, and `--reset` resets it at startup. With both, rebuilding and
+running
+
+```sh
+pichainboot --headless --reset -p tcpuart:pi path/to/kernel8.img
+```
+
+boots the new build without touching the Pi. Remote reset needs the ESP32's
+reset GPIO wired to the Pi's RUN pin and enabled in the tcpuart firmware.
+
 ## Development with QEMU
 
 QEMU's `raspi4b` machine runs the chainloader unmodified:
@@ -98,8 +122,10 @@ pichainboot -p tcp:127.0.0.1:4444 testkernel/zig-out/bin/testkernel.img
 cd chainboot && zig build test    # device protocol logic, runs on the host
 cd host && cargo test             # host protocol and TUI
 cd host && cargo test -p pichainboot --test qemu -- --ignored
+cd host && cargo test -p pichainboot --features tcpuart --test tcpuart -- --include-ignored
 ```
 
 The last command runs end-to-end tests against the real chainloader in QEMU,
 including a link that corrupts and drops bytes and a reset in the middle of a
-transfer. It needs `qemu-system-aarch64` and `zig`.
+transfer. The tcpuart tests simulate the daemon with a PTY bridged to QEMU and
+a fake control socket. These tests need `qemu-system-aarch64` and `zig`.

@@ -1,5 +1,6 @@
 mod headless;
 mod transport;
+mod tui;
 mod worker;
 
 use std::path::PathBuf;
@@ -105,7 +106,7 @@ async fn run(args: Args) -> anyhow::Result<()> {
     if args.headless {
         headless::run(transport, settings).await
     } else {
-        anyhow::bail!("the TUI is not implemented yet, use --headless")
+        tui::run(transport, settings, args.port).await
     }
 }
 

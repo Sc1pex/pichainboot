@@ -5,7 +5,7 @@
 use std::path::PathBuf;
 use std::time::Duration;
 
-use pichainboot_proto::frame::MagicMatcher;
+use pichainboot_proto::frame::{MAGIC, MagicMatcher};
 use pichainboot_proto::{BootOutcome, Client, Config, Error, Info};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
@@ -274,7 +274,11 @@ impl Worker {
     fn console_output(&self, magic: &mut MagicMatcher, bytes: &[u8]) -> Option<ConsoleEnd> {
         for (i, &byte) in bytes.iter().enumerate() {
             if magic.feed(byte) {
-                self.send(Event::Console(bytes[..=i].to_vec()));
+                // Leave the magic sequence out of the console output
+                let magic_start = (i + 1).saturating_sub(MAGIC.len());
+                if magic_start > 0 {
+                    self.send(Event::Console(bytes[..magic_start].to_vec()));
+                }
                 return Some(ConsoleEnd::DeviceReset(bytes[i + 1..].to_vec()));
             }
         }

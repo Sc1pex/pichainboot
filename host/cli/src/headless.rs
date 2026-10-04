@@ -29,11 +29,27 @@ impl Drop for RawMode {
     }
 }
 
-/// Prints a status line. Raw mode needs explicit carriage returns.
-fn status(message: &str) {
-    let mut stderr = std::io::stderr();
-    let _ = write!(stderr, "\r[pichainboot] {message}\r\n");
-    let _ = stderr.flush();
+/// Prints status lines between console output. Raw mode needs explicit
+/// carriage returns.
+#[derive(Default)]
+struct StatusPrinter {
+    /// The console output so far ended in the middle of a line
+    mid_line: bool,
+}
+
+impl StatusPrinter {
+    fn console(&mut self, bytes: &[u8]) {
+        if let Some(&last) = bytes.last() {
+            self.mid_line = last != b'\n';
+        }
+    }
+
+    fn line(&mut self, message: &str) {
+        let mut stderr = std::io::stderr();
+        let start = if std::mem::take(&mut self.mid_line) { "\r\n" } else { "\r" };
+        let _ = write!(stderr, "{start}[pichainboot] {message}\r\n");
+        let _ = stderr.flush();
+    }
 }
 
 pub async fn run(transport: Transport, settings: Settings) -> anyhow::Result<()> {
@@ -41,9 +57,10 @@ pub async fn run(transport: Transport, settings: Settings) -> anyhow::Result<()>
     let (commands, command_rx) = mpsc::unbounded_channel();
     tokio::spawn(worker::run(transport, settings, event_tx, command_rx));
 
+    let mut status = StatusPrinter::default();
     let interactive = std::io::stdin().is_terminal();
     let _raw_mode = if interactive {
-        status("press Ctrl-] to quit");
+        status.line("press Ctrl-] to quit");
         Some(RawMode::enable()?)
     } else {
         None
@@ -84,10 +101,11 @@ pub async fn run(transport: Transport, settings: Settings) -> anyhow::Result<()>
         match event {
             None => return Ok(()),
             Some(Event::Console(bytes)) => {
+                status.console(&bytes);
                 stdout.write_all(&bytes).await?;
                 stdout.flush().await?;
             }
-            Some(Event::Status(Status::WaitingForDevice)) => status("waiting for the device"),
+            Some(Event::Status(Status::WaitingForDevice)) => status.line("waiting for the device"),
             Some(Event::Status(_)) => {}
             Some(Event::Progress { sent, total }) => {
                 let mut stderr = std::io::stderr();
@@ -97,8 +115,8 @@ pub async fn run(transport: Transport, settings: Settings) -> anyhow::Result<()>
                 }
                 let _ = stderr.flush();
             }
-            Some(Event::Log(message)) => status(&message),
-            Some(Event::Error(message)) => status(&format!("error: {message}")),
+            Some(Event::Log(message)) => status.line(&message),
+            Some(Event::Error(message)) => status.line(&format!("error: {message}")),
             Some(Event::Fatal(message)) => return Err(anyhow!(message)),
         }
     }

@@ -125,7 +125,7 @@ cd host && cargo test -p pichainboot --test qemu -- --ignored
 cd host && cargo test -p pichainboot --features tcpuart --test tcpuart -- --include-ignored
 ```
 
-The last command runs end-to-end tests against the real chainloader in QEMU,
+The last two commands run end-to-end tests against the real chainloader in QEMU,
 including a link that corrupts and drops bytes and a reset in the middle of a
 transfer. The tcpuart tests simulate the daemon with a PTY bridged to QEMU and
 a fake control socket. These tests need `qemu-system-aarch64` and `zig`.

@@ -26,6 +26,18 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
 
+    // The protocol code does not touch hardware, so its tests run on the host
+    const test_step = b.step("test", "Run protocol tests on the host");
+    for ([_][]const u8{ "src/protocol.zig", "src/session.zig" }) |path| {
+        const tests = b.addTest(.{
+            .root_module = b.createModule(.{
+                .root_source_file = b.path(path),
+                .target = b.graph.host,
+            }),
+        });
+        test_step.dependOn(&b.addRunArtifact(tests).step);
+    }
+
     const kernel_img = exe.addObjCopy(.{
         .basename = "kernel8.img",
         .format = .bin,

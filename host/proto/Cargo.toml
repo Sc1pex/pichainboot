@@ -1,0 +1,13 @@
+[package]
+name = "pichainboot-proto"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+crc32fast = "1.5.2"
+thiserror = "2.0.21"
+tokio = { version = "1.53.2", features = ["io-util", "time"] }
+tracing = "0.1.44"
+
+[dev-dependencies]
+tokio = { version = "1.53.2", features = ["macros", "rt", "io-util", "time", "net"] }

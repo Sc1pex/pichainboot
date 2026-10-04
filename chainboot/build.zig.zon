@@ -5,7 +5,8 @@
     .minimum_zig_version = "0.16.0",
     .dependencies = .{
         .zregs = .{
-            .path = "../../zregs",
+            .url = "git+https://github.com/Sc1pex/zregs#f529a35f8d8821faabc72bc3122315c77416b2b4",
+            .hash = "zregs-0.1.0-KbmdjKFBAAA_I1Pwf-QHl-f6Nrcq5ZWyh0EPrAup9X3a",
         },
     },
     .paths = .{

@@ -17,6 +17,8 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
         }),
     });
+    const zregs = b.dependency("zregs", .{ .target = target });
+    exe.root_module.addImport("zregs", zregs.module("zregs"));
     exe.root_module.addAssemblyFile(b.path("src/boot/boot.S"));
     exe.setLinkerScript(b.path("src/boot/link.ld"));
 

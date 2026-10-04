@@ -1,5 +1,5 @@
 const mmio = @import("mmio.zig");
-const mr = @import("mmio-reg.zig");
+const mr = @import("zregs");
 
 const DR = mr.Register(32, struct {
     data: mr.Field(0, 8, .RW),

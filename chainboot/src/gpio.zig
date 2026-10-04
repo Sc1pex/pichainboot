@@ -1,5 +1,5 @@
 const mmio = @import("mmio.zig");
-const mr = @import("mmio-reg.zig");
+const mr = @import("zregs");
 
 pub const PinFunction = enum(u3) {
     input = 0b000,

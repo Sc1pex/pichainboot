@@ -61,23 +61,44 @@ device                               host
   |-- frame: OK(INFO) -------------->|   session established
 ```
 
-Rules:
+### Device
 
 1. After boot, the device sends the magic sequence every `ANNOUNCE_INTERVAL`
-   and watches incoming bytes for the same sequence.
-2. The host sends the magic sequence when it sees the device announcing, and
-   also whenever it wants to start a fresh session (for example right after
-   the host tool starts, in case the device is already in a session).
-3. Whenever the device receives the full magic sequence, whether it is
-   announcing or already in a session, it stops announcing, throws away all
-   session state, and sends an `OK` response for `INFO` (see below). Receiving
-   that response is how the host knows the session has started.
-4. In a session, the device only checks for the magic sequence between frames.
-   Bytes inside a frame are never matched against it.
-5. If the host sees the magic sequence during a session, the device has reset.
-   The host should restart the session.
-6. If no valid frame arrives for `IDLE_TIMEOUT`, the device goes back to step 1.
-   A host that wants to stay connected while idle sends `PING`.
+   and checks incoming bytes for the same sequence.
+2. When the full sequence arrives, the device stops announcing, enters a
+   session, and sends an `OK` response for `INFO` (see below).
+3. **The device looks for the magic sequence only while announcing.** In a
+   session it ignores the sequence, because data being transferred can contain
+   it. For example, an image of the chainloader itself contains it. If the
+   device loses frame sync (a corrupted sync byte or length, or a stalled
+   frame), it scans the following bytes only for the frame sync.
+4. In a session, an `INFO` request clears all session state, including any
+   active transfer. That is how a host starts a fresh session with a device
+   that is already in one. `INFO` is a full frame protected by a CRC, so data
+   can't trigger it by accident.
+5. If no valid frame arrives for `IDLE_TIMEOUT`, the device ends the session
+   and goes back to step 1. A host that wants to stay connected while idle
+   sends `PING`.
+
+A false match while announcing is harmless. No session exists yet, so all it
+does is start one.
+
+### Host
+
+1. On startup, the host listens for one `ANNOUNCE_INTERVAL` plus a margin. If it
+   sees the magic sequence, it echoes it. If not, the device may already be in
+   a session, so the host sends an `INFO` request. Either way, receiving
+   `OK(INFO)` means the session is established.
+2. The host checks for the magic sequence only between frames, never inside a
+   response payload.
+3. Seeing the magic sequence during a session suggests the device has reset.
+   The host echoes it. A device that really reset answers with `OK(INFO)`.
+   A device still in its session ignores the echo, the host times out, and a
+   `PING` shows the session is still alive.
+4. If the host receives `OK(INFO)` while waiting for any other response, the
+   session has restarted. Since every request is idempotent, the host restarts
+   its current operation from the beginning. For a transfer, that means
+   starting again from `MEM_WRITE`.
 
 ## Frames
 
@@ -150,7 +171,8 @@ Request payload: empty. Response: `OK`, no data. Use it as a keepalive.
 
 ### `INFO` (0x02)
 
-Request payload: empty. Response `OK` data:
+Request payload: empty. Clears all session state, including any active or
+verified transfer (see [Handshake](#handshake)). Response `OK` data:
 
 ```
 proto_version  u16   1

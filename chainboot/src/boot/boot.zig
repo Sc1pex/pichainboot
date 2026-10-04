@@ -1,8 +1,8 @@
 const root = @import("root");
 
-export fn __zig_init() noreturn {
+export fn __zig_init(dtb: usize) noreturn {
     clean_bss();
-    root.kernel_main();
+    root.kernel_main(dtb);
 
     while (true) {}
 }

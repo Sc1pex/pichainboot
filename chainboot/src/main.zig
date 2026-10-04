@@ -5,7 +5,8 @@ comptime {
 const gpio = @import("gpio.zig");
 const uart = @import("uart.zig");
 
-pub fn kernel_main() void {
+pub fn kernel_main(dtb: usize) void {
+    _ = dtb;
     gpio.configureUART0();
     uart.configure();
 

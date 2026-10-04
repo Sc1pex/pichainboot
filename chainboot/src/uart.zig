@@ -141,11 +141,47 @@ pub fn write(byte: u8) void {
     uart0.dr.write(.{ .data = byte });
 }
 
+/// Writes a byte only if there is room in the transmit FIFO
+pub fn tryWrite(byte: u8) bool {
+    mmio.writeBarrier();
+    defer mmio.readBarrier();
+
+    if (uart0.fr.read().txff != 0) {
+        return false;
+    }
+
+    uart0.dr.write(.{ .data = byte });
+    return true;
+}
+
+pub fn writeAll(bytes: []const u8) void {
+    for (bytes) |byte| {
+        write(byte);
+    }
+}
+
+/// Returns true if the transmit FIFO is empty
+pub fn txEmpty() bool {
+    mmio.writeBarrier();
+    defer mmio.readBarrier();
+
+    return uart0.fr.read().txfe != 0;
+}
+
+/// Waits until every queued byte has been transmitted
+pub fn flush() void {
+    mmio.writeBarrier();
+    defer mmio.readBarrier();
+
+    while (uart0.fr.read().txfe == 0) {}
+    while (uart0.fr.read().busy != 0) {}
+}
+
 pub fn read() u8 {
     mmio.writeBarrier();
     defer mmio.readBarrier();
 
-    // Wait until receive FIFO is empty
+    // Wait until receive FIFO is not empty
     while (uart0.fr.read().rxfe != 0) {}
 
     return uart0.dr.read().data;

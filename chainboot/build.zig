@@ -5,6 +5,8 @@ pub fn build(b: *std.Build) void {
         .abi = .none,
         .cpu_arch = .aarch64,
         .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.cortex_a72 },
+        // The MMU is off, so all memory is Device memory and unaligned accesses fault
+        .cpu_features_add = std.Target.aarch64.featureSet(&.{.strict_align}),
         .os_tag = .freestanding,
     });
     const optimize = b.option(std.builtin.OptimizeMode, "optimize", "Prioritize performance, safety, or binary size") orelse .ReleaseSmall;

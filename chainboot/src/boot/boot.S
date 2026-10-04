@@ -9,6 +9,9 @@
 
 .global _start
 _start:
+    // The firmware passes the DTB address in x0, keep it for the loaded kernel
+    mov x19, x0
+
     loadabs64 x1, __load_addr
     loadabs64 x2, __bin_start
     loadabs64 x3, __bin_end
@@ -31,5 +34,6 @@ _start:
     mov x0, #0x80000
     mov sp, x0
 
+    mov x0, x19
     loadabs64 x1, __zig_init
     br x1

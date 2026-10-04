@@ -1,0 +1,8 @@
+// Minimal device tree for the QEMU tests, so that the firmware (QEMU) passes a
+// DTB address to the chainloader. Compiled with: dtc -I dts -O dtb -o min.dtb min.dts
+/dts-v1/;
+/ {
+	#address-cells = <2>;
+	#size-cells = <1>;
+	compatible = "raspberrypi,4-model-b";
+};
